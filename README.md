@@ -51,3 +51,45 @@ Participants are required to design and implement an AI-powered agent that:
 This selective, query-driven behavior — not the ML model itself — is the core engineering challenge and the core differentiator of this project.
  
 ---
+## Our Solution Approach
+ 
+1. **Intent & Entity Extraction** — Parse the analyst's natural language query to extract intent, filters (date range, customer ID, transaction type, country), and the target AML pattern (structuring, layering, cash-out, or general).
+2. **Dynamic Execution Planning** — A LangGraph-based orchestrator decides, per query, which tools to call, in what order, and on what data subset. Not every query touches every tool.
+3. **Selective EDA** — Full exploratory analysis only runs for broad/exploratory queries; skipped entirely for targeted or single-entity queries.
+4. **On-Demand Feature Engineering** — Transaction frequency, rolling sums, amount deviation from baseline, transaction velocity, and rapid cash-out ratios, computed only for the relevant subset.
+5. **Hybrid Anomaly Detection** — Statistical methods (z-score, IQR) combined with ML-based detection (Isolation Forest for tabular anomalies, LSTM autoencoder for sequential/behavioral anomalies) and rule-based checks for known typologies.
+6. **Risk Classification** — Converts anomaly scores into low/medium/high risk using context-aware thresholds.
+7. **Explanation Layer** — Generates a concise, human-readable reason for every flag, tied directly to the query and the detected pattern.
+8. **Escalation Recommendation** — Suggests monitor / flag for review / report, based on risk level and pattern type.
+9. **Transparent Output** — Every response includes the query-aware execution summary: what was asked, what filters/entities were detected, which tools were invoked, and why — so a reviewer (or judge) can audit the agent's reasoning, not just its output.
+---
+ 
+## Architecture
+ 
+```mermaid
+flowchart TD
+    U[Analyst Query] --> IE[Intent & Entity Extraction<br/>LLM + structured output]
+    IE --> PL[Dynamic Execution Planner<br/>LangGraph Orchestrator]
+ 
+    PL -->|broad query| EDA[EDA Tool<br/>Profiling & Distributions]
+    PL -->|pattern-specific query| FE[Feature Engineering Tool<br/>Velocity, Rolling Sums, Deviation]
+    PL -->|aggregation-only query| AGG[Direct Aggregation / Rule Engine]
+    PL -->|single-entity query| LOOKUP[Entity Lookup Tool]
+ 
+    EDA --> FE
+    FE --> AD[Anomaly Detection Tool<br/>Isolation Forest + LSTM Autoencoder + Rules]
+    LOOKUP --> AD
+    AGG --> RC
+ 
+    AD --> RC[Risk Classification Tool<br/>Low / Medium / High]
+    RC --> EXP[Explanation Layer<br/>Natural Language Reasoning]
+    EXP --> ESC[Escalation Recommendation<br/>Monitor / Review / Report]
+    ESC --> OUT[Structured Output<br/>Execution Summary + Flags + Explanations]
+ 
+    PL -.->|human input needed| HITL[Human-in-the-Loop Checkpoint]
+    HITL -.-> PL
+```
+ 
+**Key design principle:** the Dynamic Execution Planner is a LangGraph state machine, not a linear script. Each node is conditionally invoked based on the extracted intent — this is what makes the system "agentic" rather than a fixed pipeline with a chatbot wrapper on top.
+ 
+---
