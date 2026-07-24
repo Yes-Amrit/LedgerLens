@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Environment
+.env
+
+# Data (keep only small samples in repo)
+data/*.csv
+!data/sample_*.csv
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# LangSmith / logs
+*.log
