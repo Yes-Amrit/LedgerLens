@@ -17,6 +17,9 @@ An agentic AI system for on-demand Anti-Money Laundering (AML) investigation. In
 
 </div>
 
+<img width="1917" height="1045" alt="image" src="https://github.com/user-attachments/assets/4e99907b-f66d-435a-be60-a0e939b4697d" />
+
+
 ## Table of Contents
  
 - [Problem Statement](#problem-statement)
