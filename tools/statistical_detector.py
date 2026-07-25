@@ -28,8 +28,8 @@ def detect_statistical_anomalies(df: pd.DataFrame, feature_columns: List[str]) -
         df = df.copy()
         df['transaction_id'] = [f"tx_{i}" for i in range(len(df))]
 
-    Z_THRESHOLD     = 3.5    # raised from 3.0 — less sensitive to heavy-tail noise
-    MIN_COLS_FLAGGED = 2      # NEW: at least 2 columns must breach to flag a row
+    Z_THRESHOLD     = 5.0    
+    MIN_COLS_FLAGGED = 3      # Require 3 features to breach to flag a row, ensuring high precision
 
     combined_scores  = pd.Series(0.0, index=df.index)
     col_breach_count = pd.Series(0,   index=df.index)   # NEW

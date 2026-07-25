@@ -7,7 +7,8 @@ from tools.statistical_detector import detect_statistical_anomalies
 from tools.isolation_forest_detector import detect_isolation_forest
 from tools.rule_based_detector import detect_structuring
 from tools.hybrid_scorer import combine_scores
-from tools.lstm_autoencoder import detect_sequential_anomalies
+from agent.state import AgentState
+# from tools.lstm_autoencoder import detect_sequential_anomalies # REMOVED for hackathon
 
 
 # ---------------------------------------------------------------------------
@@ -68,12 +69,31 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
             "method_used": str
         }
     """
-    if df.empty:
+    if df is None or df.empty:
         return {
             "flagged_transactions": [],
             "anomaly_scores": {},
             "method_used": "none"
         }
+
+    # Hackathon scope decision: batch analysis on a sample is explicitly acceptable
+    # per the problem statement's scope guidance. We sample down large dataframes
+    # to avoid performance hangs/OOM on 9M+ rows, unless they are already small.
+    if len(df) > 100_000:
+        acct_col = 'Sender_account' if 'Sender_account' in df.columns else ('nameOrig' if 'nameOrig' in df.columns else None)
+        if acct_col:
+            import numpy as np
+            np.random.seed(42)
+            unique_accounts = df[acct_col].unique()
+            avg_tx_per_acct = len(df) / len(unique_accounts)
+            target_accts = int(100_000 / avg_tx_per_acct)
+            if target_accts < len(unique_accounts):
+                sampled_accounts = np.random.choice(unique_accounts, size=target_accts, replace=False)
+                df = df[df[acct_col].isin(sampled_accounts)].copy()
+            else:
+                df = df.sample(n=100_000, random_state=42).copy()
+        else:
+            df = df.sample(n=100_000, random_state=42).copy()
 
     # Ensure transaction_id exists; required by contract
     if 'transaction_id' not in df.columns:
@@ -81,13 +101,20 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
         df['transaction_id'] = [f"tx_{i}" for i in range(len(df))]
 
     # ── Feature engineering ──────────────────────────────────────────────────
-    # PaySim features (raw)
+    # Run the feature_prep pipeline first
+    from tools.feature_prep import prepare_features
+    df = prepare_features(df)
+    
+    # PaySim features (raw + engineered)
     paysim_features = ['amount', 'oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest']
-    # SAML-D features (raw)
+    # SAML-D features (raw + engineered)
     samld_features  = ['Amount']
+    
+    # Add new feature prep columns
+    engineered_cols = ['rolling_7d_sum', 'velocity_24h', 'amount_deviation', 'unique_counterparties_7d']
 
     available_cols = set(df.columns)
-    feature_cols   = [c for c in (paysim_features + samld_features) if c in available_cols]
+    feature_cols   = [c for c in (paysim_features + samld_features + engineered_cols) if c in available_cols]
 
     if 'amount' in df.columns and 'oldbalanceOrg' in df.columns:
         df = df.copy()
@@ -121,20 +148,23 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
     stat_result  = None
     if_result    = None
     rule_result  = None
-    lstm_result  = None
     direct_result = None
 
     if target_pattern == "structuring":
         rule_result = detect_structuring(df)
         stat_result = detect_statistical_anomalies(df, feature_cols)
+        if_result   = detect_isolation_forest(df, feature_cols)
 
     elif target_pattern == "layering":
+        # Hackathon Fallback: Layering ground-truth recall for unsupervised models 
+        # (Isolation Forest / Statistical) was very poor on SAML-D. We continue routing 
+        # it through these detectors for general anomaly coverage, but we override the 
+        # method_used to "general_anomaly_low_confidence" to be transparent about performance.
         if_result   = detect_isolation_forest(df, feature_cols)
-        lstm_result = detect_sequential_anomalies(df)
         stat_result = detect_statistical_anomalies(df, feature_cols)
 
     elif target_pattern == "cash_out":
-        # PaySim direct rule is our strongest signal — treat as a standalone detector
+        # UNSUPPORTED IN THIS MILESTONE — cash_out path present but untested
         direct_result = _paysim_direct_rule(df)
         stat_result   = detect_statistical_anomalies(df, feature_cols)
         if_result     = detect_isolation_forest(df, feature_cols)
@@ -144,7 +174,6 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
         stat_result   = detect_statistical_anomalies(df, feature_cols)
         if_result     = detect_isolation_forest(df, feature_cols)
         rule_result   = detect_structuring(df)
-        lstm_result   = detect_sequential_anomalies(df)
 
     else:
         logging.warning(f"Unknown target_pattern '{target_pattern}'. Defaulting to 'none' path.")
@@ -152,14 +181,25 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
         stat_result   = detect_statistical_anomalies(df, feature_cols)
         if_result     = detect_isolation_forest(df, feature_cols)
         rule_result   = detect_structuring(df)
-        lstm_result   = detect_sequential_anomalies(df)
 
     # Use hybrid scorer to combine active detectors
-    return combine_scores(
+    result = combine_scores(
         statistical_result=stat_result,
         ml_result=if_result,
         rule_result=rule_result,
-        lstm_result=lstm_result,
         direct_result=direct_result,
         target_pattern=target_pattern
     )
+    
+    if target_pattern == "layering":
+        result["method_used"] = "general_anomaly_low_confidence"
+        
+    return result
+
+def anomaly_node(state: AgentState) -> dict:
+    target_pattern = state.get("target_pattern", "none") or "none"
+    df = state.get("dataset")
+    if df is None:
+        df = pd.DataFrame()
+    results = run_anomaly_detection(df, target_pattern)
+    return {"anomaly_results": results}

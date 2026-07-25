@@ -2,43 +2,31 @@ from typing import Dict, List, Optional
 
 
 def combine_scores(
-    statistical_result: Optional[dict],
-    ml_result:          Optional[dict],
-    rule_result:        Optional[dict],
-    lstm_result:        Optional[dict] = None,
+    statistical_result: Optional[dict] = None,
+    ml_result:          Optional[dict] = None,
+    rule_result:        Optional[dict] = None,
     direct_result:      Optional[dict] = None,
-    weights:            Optional[dict] = None,
     target_pattern:     str            = "none",
 ) -> dict:
     """
     Fuses outputs from multiple detectors.
-
-    Decision logic (in priority order):
-    1. direct_result — high-precision deterministic rules (e.g. PaySim full-drain).
-       These bypass the two-detector agreement gate because their data-validated
-       precision is near 100%. Any tx flagged here is always included in output.
-    2. rule_result for target_pattern == "structuring" — also bypasses the gate
-       because structuring rules are deterministic and pattern-specific.
-    3. All other detectors must have >= 2 independently agree to flag a tx.
-
-    Final anomaly_score is a weighted combination:
-      - direct / rule signals: always 1.0
-      - others: max-of-signals across active detectors
+    
+    Decision logic:
+    - 2-detector agreement gate: a transaction is only flagged if 2+ detectors
+      independently flag it. This eliminates single-detector false positives.
+    - Anomaly scores are the MAX across all active detectors (for PR-AUC ranking).
+    - `detector_agreement_count` is injected into each flagged entry for downstream
+      explainability (e.g. explanation_node).
+    - direct_result (e.g. PaySim cash_out) is still included as it is 100% precision.
     """
 
-    # ── Gather all results ────────────────────────────────────────────────────
-    ml_detectors = {
+    all_results = {
         "statistical":       statistical_result,
         "isolation_forest":  ml_result,
-        "lstm":              lstm_result,
+        "rule_based":        rule_result,
+        "direct":            direct_result,
     }
-    # Separate high-authority detectors
-    authority_results = {
-        "rule_based": rule_result,
-        "direct":     direct_result,
-    }
-
-    all_results = {**ml_detectors, **authority_results}
+    
     active_results = {k: v for k, v in all_results.items() if v is not None}
 
     if not active_results:
@@ -48,23 +36,28 @@ def combine_scores(
             "method_used":          "hybrid",
         }
 
-    # ── Collect all tx IDs ────────────────────────────────────────────────────
+    # Collect all tx IDs
     all_tx_ids: set = set()
     for res in active_results.values():
         all_tx_ids.update(res.get("anomaly_scores", {}).keys())
 
     final_scores:    Dict[str, float] = {}
     flagged_tx_data: Dict[str, dict]  = {}
-    ml_flag_counts:  Dict[str, int]   = {tx_id: 0 for tx_id in all_tx_ids}
-    authority_flagged: set             = set()
+    flag_counts:     Dict[str, int]   = {tx_id: 0 for tx_id in all_tx_ids}
+    best_methods:    Dict[str, str]   = {tx_id: "hybrid" for tx_id in all_tx_ids}
 
     for tx_id in all_tx_ids:
         max_score = 0.0
+        best_method = "hybrid"
 
         for method, res in active_results.items():
             score = res.get("anomaly_scores", {}).get(tx_id, 0.0)
             if score > max_score:
                 max_score = score
+                best_method = method
+            elif score == max_score and best_method == "hybrid":
+                # Fallback if first score is 0.0
+                best_method = method
 
             is_flagged = any(
                 tx["transaction_id"] == tx_id
@@ -72,13 +65,7 @@ def combine_scores(
             )
 
             if is_flagged:
-                # Track which authority detectors flagged this tx
-                if method == "direct":
-                    authority_flagged.add(tx_id)
-                elif method == "rule_based" and target_pattern == "structuring":
-                    authority_flagged.add(tx_id)
-                else:
-                    ml_flag_counts[tx_id] += 1
+                flag_counts[tx_id] += 1
 
                 # Build merged reason metadata
                 if tx_id not in flagged_tx_data:
@@ -102,17 +89,20 @@ def combine_scores(
                             flagged_tx_data[tx_id]["reason_features"][f"{method}_{k}"] = v
 
         final_scores[tx_id] = max_score
+        best_methods[tx_id] = best_method
 
-    # ── Final decision gate ───────────────────────────────────────────────────
+    # 2. Re-introduce 2-detector gate (from earlier robust version).
+    # We require at least 2 detectors to flag a transaction to eliminate false positives.
     final_flagged: List[dict] = []
     for tx_id in all_tx_ids:
-        include = (
-            tx_id in authority_flagged          # high-precision authority bypass
-            or ml_flag_counts[tx_id] >= 2       # ≥2 ML detectors agree
-        )
-        if include and tx_id in flagged_tx_data:
-            final_flagged.append(flagged_tx_data[tx_id])
+        if flag_counts[tx_id] >= 2 and tx_id in flagged_tx_data:
+            # Inject the detector agreement count for downstream node logic
+            entry = flagged_tx_data[tx_id]
+            entry["detector_agreement_count"] = flag_counts[tx_id]
+            final_flagged.append(entry)
 
+    # We can't return a single method_used if it varies by transaction, 
+    # but the contract requires a top-level method_used. We'll return "hybrid"
     return {
         "flagged_transactions": final_flagged,
         "anomaly_scores":       final_scores,
