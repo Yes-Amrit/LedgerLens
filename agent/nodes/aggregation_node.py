@@ -6,15 +6,17 @@ def aggregation_node(state: AgentState) -> dict:
     Direct pandas groupby/filter for threshold-style queries 
     (e.g. count transactions under $10,000 per customer).
     """
-    try:
-        df = pd.read_csv("data/transactions.csv")
-    except Exception:
-        df = pd.DataFrame({
-            "customer_id": ["C1", "C1", "C2", "C1", "C3", "C2"],
-            "amount": [5000, 15000, 2000, 9000, 12000, 8000]
-        })
+    df = state.get("dataset")
+    if df is None or type(df) is not pd.DataFrame or df.empty:
+        return {"feature_results": {"aggregation_counts": {}}}
         
-    under_10k = df[df['amount'] < 10000]
-    counts = under_10k.groupby('customer_id').size().to_dict()
+    amount_col = "Amount" if "Amount" in df.columns else "amount"
+    account_col = "Sender_account" if "Sender_account" in df.columns else "customer_id"
     
+    if amount_col in df.columns and account_col in df.columns:
+        under_10k = df[df[amount_col] < 10000]
+        counts = under_10k.groupby(account_col).size().to_dict()
+    else:
+        counts = {}
+        
     return {"feature_results": {"aggregation_counts": counts}}
