@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List
 import logging
+import torch
+import torch.nn as nn
 
 try:
     import torch
@@ -88,7 +90,7 @@ def detect_sequential_anomalies(df: pd.DataFrame, sequence_length: int = 10) -> 
             "method_used": "lstm_autoencoder"
         }
         
-    X = torch.tensor(sequences, dtype=torch.float32).unsqueeze(-1) # (batch, seq_len, 1)
+    X = torch.tensor(np.array(sequences), dtype=torch.float32).unsqueeze(-1)
     
     # Instantiate and "train" (fast single pass or random weights for demo if untrainable)
     # Since this is to be used dynamically, training on the fly might be too slow for large df.
