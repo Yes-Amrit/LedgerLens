@@ -63,6 +63,21 @@ def synthetic_data():
             }
         )
 
+    # Clean account with few transactions and no threshold skirting
+    for i in range(2):
+        data.append(
+            {
+                "transaction_id": f"tx_clean_{i}",
+                "account_id": "acc_clean",
+                "amount": 1500.0,
+                "timestamp": base_time + timedelta(days=5, hours=i),
+                "oldbalanceOrg": 5000.0,
+                "newbalanceOrig": 3500.0,
+                "oldbalanceDest": 0.0,
+                "newbalanceDest": 1500.0,
+            }
+        )
+
     return pd.DataFrame(data)
 
 
@@ -139,6 +154,27 @@ def test_run_anomaly_detection_routing(synthetic_data):
         # The synthetic data might not breach high-confidence thresholds for a strict 'hybrid' label
         # every time. We validate that the engine routes to a valid terminal state without crashing.
         assert res["method_used"] in ["hybrid", "general_anomaly_low_confidence"]
+
+
+def test_detect_structuring_synthetic(synthetic_data):
+    df = synthetic_data
+    # Run the rule-based detector
+    res = detect_structuring(df)
+    
+    # We expect the structuring account to be flagged
+    flagged = res["flagged_transactions"]
+    flagged_accounts = {tx["account_id"] for tx in flagged}
+    assert "acc_structuring" in flagged_accounts, "Failed to flag obvious synthetic structuring case"
+
+
+def test_detect_structuring_clean(synthetic_data):
+    df = synthetic_data
+    res = detect_structuring(df)
+    
+    flagged = res["flagged_transactions"]
+    flagged_accounts = {tx["account_id"] for tx in flagged}
+    assert "acc_clean" not in flagged_accounts, "Clean account was incorrectly flagged"
+
 
 
 if __name__ == "__main__":

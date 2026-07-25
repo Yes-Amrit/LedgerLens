@@ -124,9 +124,11 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
     direct_result = None
 
     if target_pattern == "structuring":
-        rule_result = detect_structuring(df)
-        stat_result = detect_statistical_anomalies(df, feature_cols)
-        if_result   = detect_isolation_forest(df, feature_cols)
+        # Structuring is a rule-defined pattern (amount+time+count criteria).
+        # Statistical/IF detectors contribute 0% TP for this pattern and the
+        # hybrid 2-detector agreement gate kills all rule-based TPs.
+        # Route directly to the domain-specific detector.
+        return detect_structuring(df)
 
     elif target_pattern == "layering":
         if_result   = detect_isolation_forest(df, feature_cols)
