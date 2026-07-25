@@ -106,9 +106,15 @@ def combine_scores(
     if direct_result:
         direct_flags = {tx["transaction_id"] for tx in direct_result.get("flagged_transactions", [])}
 
+    HYBRID_SCORE_THRESHOLD = 0.8
+
+    # DEBUG PRE-FILTER
+    scores_exceeding_threshold = sum(1 for score in final_scores.values() if score >= HYBRID_SCORE_THRESHOLD)
+    print(f"DEBUG: Scores exceeding threshold {HYBRID_SCORE_THRESHOLD}: {scores_exceeding_threshold}")
+
     final_flagged: List[dict] = []
     for tx_id in all_tx_ids:
-        meets_threshold = flag_counts[tx_id] >= required_agreements
+        meets_threshold = (flag_counts[tx_id] >= required_agreements) or (final_scores[tx_id] >= HYBRID_SCORE_THRESHOLD)
         is_direct = tx_id in direct_flags
         
         if (meets_threshold or is_direct) and tx_id in flagged_tx_data:
@@ -116,6 +122,9 @@ def combine_scores(
             entry = flagged_tx_data[tx_id]
             entry["detector_agreement_count"] = flag_counts[tx_id]
             final_flagged.append(entry)
+
+    # DEBUG POST-FILTER
+    print(f"DEBUG: Entries actually appended to flagged_transactions: {len(final_flagged)}")
 
     # Return top-level "hybrid" method as required by the contract
     return {

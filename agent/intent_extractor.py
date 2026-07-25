@@ -27,7 +27,8 @@ Result: intent="entity_lookup", entity_ids=["4521"]
 """
 
 def extract_intent(query: str) -> ExtractedIntent:
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, max_output_tokens=256)
+    from agent.config import MODEL_NAME
+    llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0, max_output_tokens=256)
     structured_llm = llm.with_structured_output(ExtractedIntent)
     
     prompt = ChatPromptTemplate.from_messages([
