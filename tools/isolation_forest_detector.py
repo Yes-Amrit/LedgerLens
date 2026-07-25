@@ -57,9 +57,10 @@ def detect_isolation_forest(df: pd.DataFrame, feature_columns: List[str]) -> dic
     raw_scores = clf.score_samples(X)   # = decision_function + offset
     pos_scores = -raw_scores            # flip so higher = more anomalous
 
-    # Min-max to [0,1] for the contract (anomaly_scores must be in [0,1])
-    s_min, s_max = pos_scores.min(), pos_scores.max()
-    norm_scores  = (pos_scores - s_min) / (s_max - s_min) if s_max > s_min else np.zeros_like(pos_scores)
+    # Map decision_function to [0, 1] using a sigmoid
+    # decision < 0 means anomaly (score > 0.5)
+    # decision > 0 means normal (score < 0.5)
+    norm_scores = 1 / (1 + np.exp(decision))
 
     # Use IF's own decision boundary (decision < 0) to determine flagged set
     # This is more principled than cutting at normalised 0.5
