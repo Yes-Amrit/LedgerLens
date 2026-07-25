@@ -1,0 +1,17 @@
+{
+  "Structuring": "structuring",
+  "Smurfing": "structuring",
+  "Layered_Fan_In": "layering",
+  "Layered_Fan_Out": "layering",
+  "Normal_Small_Fan_Out": "normal",
+  "Normal_Fan_Out": "normal",
+  "Normal_Fan_In": "normal",
+  "Normal_Group": "normal",
+  "Normal_Cash_Withdrawal": "normal",
+  "Normal_Cash_Deposits": "normal",
+  "Normal_Periodical": "normal",
+  "Normal_Plus_Mutual": "normal",
+  "Normal_Mutual": "normal",
+  "Normal_Foward": "normal",
+  "Normal_single_large": "normal"
+}
