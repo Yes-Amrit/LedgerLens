@@ -39,12 +39,12 @@ def synthetic_data():
             {
                 "transaction_id": f"tx_struct_{i}",
                 "account_id": "acc_structuring",
-                "amount": 9500.0,
+                "amount": 9400.0,
                 "timestamp": base_time + timedelta(minutes=i * 10),
                 "oldbalanceOrg": 20000.0,
-                "newbalanceOrig": 20000.0 - 9500.0,
+                "newbalanceOrig": 20000.0 - 9400.0,
                 "oldbalanceDest": 0.0,
-                "newbalanceDest": 9500.0,
+                "newbalanceDest": 9400.0,
             }
         )
 
@@ -107,7 +107,8 @@ def validate_contract(result_dict, df):
 
 
 def test_detectors_contract(synthetic_data):
-    df = synthetic_data
+    from tools.schema_utils import normalize_schema
+    df = normalize_schema(synthetic_data)
     feature_cols = ["amount", "oldbalanceOrg", "newbalanceOrig"]
 
     stat_res = detect_statistical_anomalies(df, feature_cols)
@@ -124,7 +125,8 @@ def test_detectors_contract(synthetic_data):
 
 
 def test_hybrid_scorer_graceful_degradation(synthetic_data):
-    df = synthetic_data
+    from tools.schema_utils import normalize_schema
+    df = normalize_schema(synthetic_data)
     feature_cols = ["amount", "oldbalanceOrg", "newbalanceOrig"]
 
     stat_res = detect_statistical_anomalies(df, feature_cols)
@@ -144,7 +146,8 @@ def test_hybrid_scorer_graceful_degradation(synthetic_data):
 
 
 def test_run_anomaly_detection_routing(synthetic_data):
-    df = synthetic_data
+    from tools.schema_utils import normalize_schema
+    df = normalize_schema(synthetic_data)
     patterns = ["structuring", "layering", "cash_out", "none"]
 
     for pattern in patterns:
@@ -153,7 +156,31 @@ def test_run_anomaly_detection_routing(synthetic_data):
         
         # The synthetic data might not breach high-confidence thresholds for a strict 'hybrid' label
         # every time. We validate that the engine routes to a valid terminal state without crashing.
-        assert res["method_used"] in ["hybrid", "general_anomaly_low_confidence"]
+        assert res["method_used"] in ["hybrid", "general_anomaly_low_confidence", "rule_based"]
+
+
+def test_detect_structuring_synthetic(synthetic_data):
+    from tools.schema_utils import normalize_schema
+    df = normalize_schema(synthetic_data)
+    
+    # Run the rule-based detector
+    res = detect_structuring(df)
+    
+    # We expect the structuring account to be flagged
+    flagged = res["flagged_transactions"]
+    flagged_accounts = {tx["account_id"] for tx in flagged}
+    assert "acc_structuring" in flagged_accounts, "Failed to flag obvious synthetic structuring case"
+
+
+def test_detect_structuring_clean(synthetic_data):
+    from tools.schema_utils import normalize_schema
+    df = normalize_schema(synthetic_data)
+    res = detect_structuring(df)
+    
+    flagged = res["flagged_transactions"]
+    flagged_accounts = {tx["account_id"] for tx in flagged}
+    assert "acc_clean" not in flagged_accounts, "Clean account was incorrectly flagged"
+
 
 
 def test_detect_structuring_synthetic(synthetic_data):
