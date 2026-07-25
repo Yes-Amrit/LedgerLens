@@ -6,10 +6,11 @@ venv/
 
 # Environment
 .env
+.env.*
 
-# Data (keep only small samples in repo)
+# Data (ignore all large datasets, but KEEP small samples)
 data/*.csv
-!data/sample_*.csv
+!data/sample_saml_d.csv
 
 # IDE / OS
 .vscode/
