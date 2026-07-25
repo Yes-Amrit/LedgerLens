@@ -2,12 +2,21 @@ from langgraph.graph import StateGraph, END
 from agent.state import AgentState
 from agent.intent_extractor import extract_intent
 from agent.planner import build_plan
+from data.loader import load_dataset
 
 from agent.nodes.eda_node import eda_node
 from agent.nodes.feature_engineering_node import feature_engineering_node
 from agent.nodes.aggregation_node import aggregation_node
 from agent.nodes.entity_lookup_node import entity_lookup_node
-from agent.nodes.anomaly_node import anomaly_node
+from agent.nodes.anomaly_node import run_anomaly_detection
+import pandas as pd
+
+def anomaly_node(state: AgentState) -> dict:
+    df = state.get("dataset")
+    if df is None or not isinstance(df, pd.DataFrame):
+        df = pd.DataFrame()
+    pat = state.get("target_pattern") or "none"
+    return {"anomaly_results": run_anomaly_detection(df, pat)}
 from agent.nodes.risk_node import risk_node
 from agent.nodes.explanation_node import explanation_node
 from agent.nodes.escalation_node import escalation_node
@@ -17,13 +26,16 @@ def extract_and_plan(state: AgentState) -> dict:
     extracted = extract_intent(raw_query)
     plan = build_plan(extracted)
     
+    df = load_dataset()
+    
     return {
         "intent": extracted.intent,
         "date_filter": extracted.date_filter,
         "entity_ids": extracted.entity_ids,
         "target_pattern": extracted.target_pattern,
         "transaction_type_filter": extracted.transaction_type_filter,
-        "plan": plan
+        "plan": plan,
+        "dataset": df
     }
 
 def route_next(state: AgentState) -> str:

@@ -1,4 +1,4 @@
-from typing import TypedDict, Optional, List
+from typing import TypedDict, Optional, List, Any
 from typing_extensions import NotRequired
 
 class AgentState(TypedDict):
@@ -9,6 +9,7 @@ class AgentState(TypedDict):
     target_pattern: NotRequired[Optional[str]]
     transaction_type_filter: NotRequired[Optional[str]]
     plan: List[str]
+    dataset: NotRequired[Any]
     eda_results: NotRequired[Optional[dict]]
     feature_results: NotRequired[Optional[dict]]
     anomaly_results: NotRequired[Optional[dict]]
