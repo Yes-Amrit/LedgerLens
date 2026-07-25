@@ -45,8 +45,8 @@ def detect_isolation_forest(df: pd.DataFrame, feature_columns: List[str]) -> dic
     X = df[available_features].fillna(0).values
 
     clf = IsolationForest(
-        n_estimators=200,       # more stable than 100
-        contamination=0.05,     # expect ~5% anomalies — biggest precision boost
+        n_estimators=200,       
+        contamination=0.005,     # extremely strict for high precision
         random_state=42,
         n_jobs=-1,
     )
