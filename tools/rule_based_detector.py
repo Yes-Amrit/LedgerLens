@@ -55,11 +55,8 @@ def detect_structuring(df: pd.DataFrame, threshold: float = 7258.49, window_days
             score = 0.0
 
             # Signal 1: Amount in structuring zone (0.4 weight)
-            if struct_low <= amt <= struct_high:
-                if struct_high > struct_low:
-                    score += 0.4 * ((amt - struct_low) / (struct_high - struct_low))
-                else:
-                    score += 0.4
+            if struct_low <= amt < struct_high:
+                score += 0.4 * ((amt - struct_low) / (struct_high - struct_low))
 
             # Signal 2: High velocity for this account (0.3 weight)
             n_acct = acct_tx_count.loc[idx]
@@ -116,8 +113,8 @@ def detect_structuring(df: pd.DataFrame, threshold: float = 7258.49, window_days
                 amt = row['_amt']
                 reason_parts = []
                 
-                if struct_low <= amt <= struct_high:
-                    reason_parts.append(f"amount {amt:.2f} in structuring zone [{struct_low},{struct_high:.2f}]")
+                if struct_low <= amt < struct_high:
+                    reason_parts.append(f"amount {amt:.2f} in structuring zone [{struct_low},{struct_high:.2f})")
                 if acct_tx_count.loc[idx] >= 2:
                     reason_parts.append(f"account has {acct_tx_count.loc[idx]} transactions")
                 if sc == 1.0 and spec_low <= amt <= spec_high:

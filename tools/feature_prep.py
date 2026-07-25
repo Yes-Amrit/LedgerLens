@@ -46,7 +46,7 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     # ── Resolve schema ────────────────────────────────────────────────────────
     acct_col   = _resolve(df, ["Sender_account", "nameOrig", "account_id"])
     amount_col = _resolve(df, ["Amount", "amount"])
-    time_col   = _resolve(df, ["timestamp", "Time", "step"])
+    time_col   = _resolve(df, ["Timestamp", "timestamp", "Time", "step"])
 
     if amount_col is None:
         # Nothing useful to compute; return df unchanged
@@ -65,7 +65,9 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # ── Time-based features require a usable timestamp ────────────────────────
     ts = None
-    if time_col == "timestamp" and "timestamp" in df.columns:
+    if time_col == "Timestamp" and "Timestamp" in df.columns:
+        ts = pd.to_datetime(df["Timestamp"], errors="coerce")
+    elif time_col == "timestamp" and "timestamp" in df.columns:
         ts = pd.to_datetime(df["timestamp"], errors="coerce")
     elif time_col == "step" and "step" in df.columns:
         # PaySim 'step' is in hours — convert to a fake datetime for rolling
