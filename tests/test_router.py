@@ -27,3 +27,10 @@ def test_entity_lookup_plan():
     assert extracted.intent == "entity_lookup"
     assert "4521" in (extracted.entity_ids or [])
     assert plan == ["entity_lookup_node", "anomaly_node", "risk_node", "explanation_node", "escalation_node"]
+
+def test_dataset_loads():
+    from data.loader import load_dataset
+    df = load_dataset()
+    assert not df.empty
+    assert "Amount" in df.columns
+    assert "Sender_account" in df.columns
