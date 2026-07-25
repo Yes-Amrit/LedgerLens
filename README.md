@@ -5,7 +5,18 @@
 An agentic AI system for on-demand Anti-Money Laundering (AML) investigation. Instead of running every transaction through a fixed, expensive pipeline, LedgerLens reads the analyst's query, decides what actually needs to happen, and invokes only the relevant tools — then explains every flag in plain English.
  
 ---
- 
+<div align="center">
+
+![Tech Stack](https://skillicons.dev/icons?i=py,githubactions&theme=dark)
+
+<br/>
+
+![Agentic AI](https://img.shields.io/badge/Agentic%20AI-8A2BE2?style=plastic&logo=probot&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-FF6F00?style=plastic&logo=langchain&logoColor=white)
+![License MIT](https://img.shields.io/badge/License%20MIT-007EC6?style=plastic&logo=open-source-initiative&logoColor=white)
+
+</div>
+
 ## Table of Contents
  
 - [Problem Statement](#problem-statement)
