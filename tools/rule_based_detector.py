@@ -10,27 +10,23 @@ def detect_structuring(df: pd.DataFrame, threshold: float = 7258.49, window_days
     if df.empty or 'transaction_id' not in df.columns:
         return {"flagged_transactions": [], "anomaly_scores": {}, "method_used": "rule_based"}
 
+    # ── Schema validation (outside try/except so it propagates loudly) ────────
+    required_cols = ['account_id', 'amount', 'timestamp', 'transaction_id']
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        raise ValueError(
+            f"[rule_based_detector] Missing required columns: {missing}. "
+            f"Normalize the dataframe with normalize_schema() before calling detect_structuring()."
+        )
+
     flagged: List[dict] = []
     scores: Dict[str, float] = {}
 
     try:
-        # ── Schema detection ──────────────────────────────────────────────────
-        amount_col = 'Amount' if 'Amount' in df.columns else 'amount'
-        time_col = 'Timestamp' if 'Timestamp' in df.columns else 'timestamp'
-        
-        # FIX: Added 'account_id' to the list of accepted column names
-        acct_col = None
-        for col in ['Sender_account', 'nameOrig', 'account_id']:
-            if col in df.columns:
-                acct_col = col
-                break
-
-        if not acct_col or amount_col not in df.columns or time_col not in df.columns:
-            return {"flagged_transactions": [], "anomaly_scores": {}, "method_used": "rule_based"}
 
         df_work = df.copy()
-        df_work['_amt'] = pd.to_numeric(df_work[amount_col], errors='coerce').fillna(0)
-        df_work['_t'] = pd.to_datetime(df_work[time_col], errors='coerce')
+        df_work['_amt'] = pd.to_numeric(df_work['amount'], errors='coerce').fillna(0)
+        df_work['_t'] = pd.to_datetime(df_work['timestamp'], errors='coerce')
         df_work = df_work.dropna(subset=['_t'])
 
         # ── Parameters ─────────────────
@@ -44,7 +40,7 @@ def detect_structuring(df: pd.DataFrame, threshold: float = 7258.49, window_days
         time_window     = pd.Timedelta(days=window_days)
 
         # ── Per-account velocity ──────────────────────────────────────────────
-        acct_tx_count = df_work.groupby(acct_col)['transaction_id'].transform('count')
+        acct_tx_count = df_work.groupby('account_id')['transaction_id'].transform('count')
 
         # ── Score every transaction ───────────────────────────────────────────
         raw_scores: Dict[str, float] = {}
@@ -68,8 +64,8 @@ def detect_structuring(df: pd.DataFrame, threshold: float = 7258.49, window_days
             raw_scores[tx_id] = score
 
         # ── Rolling window boost & Spec Rule ──────────────────────────────────
-        df_sorted = df_work.sort_values(by=[acct_col, '_t'])
-        for account, group in df_sorted.groupby(acct_col):
+        df_sorted = df_work.sort_values(by=['account_id', '_t'])
+        for account, group in df_sorted.groupby('account_id'):
             if len(group) < 2:
                 continue
             records = group.reset_index(drop=True)
@@ -122,7 +118,7 @@ def detect_structuring(df: pd.DataFrame, threshold: float = 7258.49, window_days
 
                 flagged.append({
                     "transaction_id": tx_id,
-                    "account_id":     str(row.get(acct_col, 'unknown')),
+                    "account_id":     str(row.get('account_id', 'unknown')),
                     "amount":         float(amt),
                     "timestamp":      row.get('_t', 0),
                     "reason_features": {"structuring_rule": "; ".join(reason_parts)},
