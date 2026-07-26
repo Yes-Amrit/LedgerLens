@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 from tools.rule_based_detector import detect_structuring
+from tools.schema_utils import normalize_schema
 
 def test_detect_structuring_empty():
     df = pd.DataFrame()
@@ -10,8 +11,8 @@ def test_detect_structuring_empty():
 
 def test_detect_structuring_missing_columns():
     df = pd.DataFrame({"transaction_id": [1, 2]})
-    result = detect_structuring(df)
-    assert len(result['flagged_transactions']) == 0
+    with pytest.raises(ValueError, match="Missing required columns"):
+        detect_structuring(df)
 
 def test_detect_structuring_single_transaction_below_threshold():
     df = pd.DataFrame({
@@ -20,6 +21,7 @@ def test_detect_structuring_single_transaction_below_threshold():
         "Amount": [500],
         "Timestamp": ["2023-01-01 10:00:00"]
     })
+    df = normalize_schema(df)
     result = detect_structuring(df)
     assert len(result['flagged_transactions']) == 0
 
@@ -37,6 +39,7 @@ def test_detect_structuring_basic_fuzzy_score():
             "2023-01-03 10:00:00"
         ]
     })
+    df = normalize_schema(df)
     result = detect_structuring(df)
     flagged = {t["transaction_id"] for t in result["flagged_transactions"]}
     assert "tx3" in flagged
@@ -54,6 +57,7 @@ def test_detect_structuring_rolling_sum():
             "2023-01-01 11:00:00"
         ]
     })
+    df = normalize_schema(df)
     # Acct has 2 transactions, so n_acct=2 -> score = 0.15
     # Amount 4900 score = 0.4*(3900/8500) = 0.183
     # Base score = 0.15 + 0.183 = 0.333
@@ -76,6 +80,7 @@ def test_detect_structuring_spec_rule():
             "2023-01-01 12:00:00"
         ]
     })
+    df = normalize_schema(df)
     result = detect_structuring(df)
     flagged = {t["transaction_id"] for t in result["flagged_transactions"]}
     assert "tx1" in flagged

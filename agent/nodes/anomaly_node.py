@@ -68,8 +68,11 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
             "method_used": "none"
         }
 
+    from tools.schema_utils import normalize_schema
+    df = normalize_schema(df)
+
     if len(df) > 100_000:
-        acct_col = 'Sender_account' if 'Sender_account' in df.columns else ('nameOrig' if 'nameOrig' in df.columns else None)
+        acct_col = 'account_id' if 'account_id' in df.columns else None
         if acct_col:
             np.random.seed(42)
             unique_accounts = df[acct_col].unique()
@@ -83,15 +86,11 @@ def run_anomaly_detection(df: pd.DataFrame, target_pattern: str) -> dict:
         else:
             df = df.sample(n=100_000, random_state=42).copy()
 
-    if 'transaction_id' not in df.columns:
-        df = df.copy()
-        df['transaction_id'] = [f"tx_{i}" for i in range(len(df))]
-
     from tools.feature_prep import prepare_features
     df = prepare_features(df)
 
     paysim_features = ['amount', 'oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest']
-    samld_features  = ['Amount']
+    samld_features  = ['amount']
     engineered_cols = ['rolling_7d_sum', 'velocity_24h', 'amount_deviation', 'unique_counterparties_7d']
 
     available_cols = set(df.columns)
