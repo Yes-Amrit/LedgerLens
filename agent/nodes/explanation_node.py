@@ -11,6 +11,7 @@ def explanation_node(state: AgentState) -> dict:
     """
     risk_results = state.get("risk_results", {})
     overall_risk = risk_results.get("overall_risk", "low")
+    evidence_source = risk_results.get("evidence_source", "anomaly_pipeline")
     
     if overall_risk == "low":
         return {"explanation": "No significant risk detected. Transactions appear normal."}
@@ -40,8 +41,39 @@ def explanation_node(state: AgentState) -> dict:
         flagged_summary.append({"note": f"...and {len(clean_flagged) - 10} more transactions"})
     else:
         flagged_summary = clean_flagged
-        
-    prompt = f"""
+
+    # ── Distinct prompt for aggregation-only vs anomaly-pipeline results ──
+    # Aggregation-only results are single-signal (volume/threshold match
+    # only) and must NOT be presented as if confirmed by multiple detectors.
+    if evidence_source == "aggregation_only":
+        prompt = f"""
+    You are an AML investigator assistant.
+    These accounts were identified by a VOLUME/THRESHOLD query only
+    (e.g. counting transactions under a certain dollar amount).
+
+    IMPORTANT CONTEXT — READ CAREFULLY:
+    • This is a single-signal match based on transaction count/amount
+      thresholds alone.
+    • NO statistical anomaly detection, Isolation Forest ML model, or
+      rule-based structuring checks have been run on these accounts.
+    • The risk level is capped at MEDIUM because there is no multi-
+      detector corroboration.
+    • Do NOT imply that multiple detection methods confirmed this finding.
+
+    Overall Risk Level: {overall_risk} (capped — aggregation only)
+    Method Used: {method}
+    Matched Accounts: {flagged_summary}
+
+    Provide a concise explanation that:
+    1. States which accounts matched the threshold criteria and why.
+    2. Clearly notes this is based on transaction volume/amount patterns
+       only, without independent anomaly detection corroboration.
+    3. Recommends running the full anomaly detection pipeline (statistical
+       + ML + rule-based) on these specific accounts for corroboration
+       before escalating further.
+    """
+    else:
+        prompt = f"""
     You are an AML investigator assistant. 
     Explain why these specific transactions were flagged.
     
@@ -66,3 +98,4 @@ def explanation_node(state: AgentState) -> dict:
         explanation = f"Error generating explanation: {str(e)}"
         
     return {"explanation": explanation}
+
