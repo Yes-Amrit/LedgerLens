@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.output_parsers import PydanticOutputParser
 from agent.schemas import ExtractedIntent
 
 load_dotenv()
@@ -24,17 +25,39 @@ Result: intent="aggregation_query", target_pattern="none"
 
 User: "Is customer ID 4521 suspicious?"
 Result: intent="entity_lookup", entity_ids=["4521"]
+
+Respond with ONLY the structured output. Do not include explanations, markdown formatting, or code fences.
 """
 
 def extract_intent(query: str) -> ExtractedIntent:
     from agent.config import MODEL_NAME
-    llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0, max_output_tokens=256)
-    structured_llm = llm.with_structured_output(ExtractedIntent)
-    
+
+    llm = ChatGoogleGenerativeAI(
+        model=MODEL_NAME,
+        temperature=0,
+        max_output_tokens=1024,  # was 256 — too small, was truncating JSON mid-object
+    )
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
         ("human", "{query}")
     ])
-    
+
+    # method="json_mode" forces Gemini's native JSON output mode rather than
+    # relying on prompted function-calling, which is more failure-prone here
+    structured_llm = llm.with_structured_output(ExtractedIntent, method="json_mode")
     chain = prompt | structured_llm
-    return chain.invoke({"query": query})
+
+    try:
+        return chain.invoke({"query": query})
+    except Exception as e:
+        # Fallback: retry once with function-calling mode instead of json_mode,
+        # in case json_mode itself was the failure point for this query
+        try:
+            fallback_llm = llm.with_structured_output(ExtractedIntent, method="function_calling")
+            fallback_chain = prompt | fallback_llm
+            return fallback_chain.invoke({"query": query})
+        except Exception:
+            raise RuntimeError(
+                f"Intent extraction failed for query: {query!r}. Original error: {e}"
+            )
