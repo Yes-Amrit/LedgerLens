@@ -58,3 +58,30 @@ def test_dataset_loads():
     assert not df.empty
     assert "Amount" in df.columns
     assert "Sender_account" in df.columns
+
+def test_risk_node_caps_aggregation_at_medium():
+    from agent.nodes.risk_node import risk_node
+    
+    # 1. Test Aggregation-only path
+    state_agg = {
+        "anomaly_results": {
+            "method_used": "aggregation",
+            "anomaly_scores": {"tx_1": 1.0} # Score high enough for HIGH risk
+        }
+    }
+    res_agg = risk_node(state_agg)
+    assert res_agg["risk_results"]["overall_risk"] == "medium"
+    assert res_agg["risk_results"]["transaction_risks"]["tx_1"] == "medium"
+    assert res_agg["risk_results"]["evidence_source"] == "aggregation_only"
+
+    # 2. Test Anomaly pipeline path
+    state_anomaly = {
+        "anomaly_results": {
+            "method_used": "hybrid",
+            "anomaly_scores": {"tx_1": 1.0} # Score high enough for HIGH risk
+        }
+    }
+    res_anomaly = risk_node(state_anomaly)
+    assert res_anomaly["risk_results"]["overall_risk"] == "high"
+    assert res_anomaly["risk_results"]["transaction_risks"]["tx_1"] == "high"
+    assert res_anomaly["risk_results"]["evidence_source"] == "anomaly_pipeline"
